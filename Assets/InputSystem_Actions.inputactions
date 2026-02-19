@@ -43,8 +43,8 @@
                     "initialStateCheck": false
                 },
                 {
-                    "name": "Crouch",
-                    "type": "Button",
+                    "name": "Slide",
+                    "type": "PassThrough",
                     "id": "27c5f898-bc57-4ee1-8800-db469aca5fe3",
                     "expectedControlType": "Button",
                     "processors": "",
@@ -459,7 +459,7 @@
                     "interactions": "",
                     "processors": "",
                     "groups": "Gamepad",
-                    "action": "Crouch",
+                    "action": "Slide",
                     "isComposite": false,
                     "isPartOfComposite": false
                 },
@@ -467,10 +467,10 @@
                     "name": "",
                     "id": "36e52cba-0905-478e-a818-f4bfcb9f3b9a",
                     "path": "<Keyboard>/leftCtrl",
-                    "interactions": "Hold",
+                    "interactions": "",
                     "processors": "",
                     "groups": "Keyboard&Mouse",
-                    "action": "Crouch",
+                    "action": "Slide",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }

@@ -1,45 +1,48 @@
-using UnityEngine;
-using System.Collections;
-using System.Collections.Generic;
+ï»¿using UnityEngine;
 using Unity.Cinemachine;
 using UnityEngine.Events;
 
 [RequireComponent(typeof(CharacterController))]
 public class FPController : MonoBehaviour
 {
-    [Header("Movement Parameters")]
-    public float Acceleration = 25f;          //  increased a bit for snappier feel overall (tune down if too quick)
-    [SerializeField] float Deceleration = 60f; //  NEW: much higher for quick stops (40–80 range works well)
-    [SerializeField] float RunSpeed = 8f;
-    [SerializeField] float JumpHeight = 2f;
-    private int timesJumped = 0;
-    [SerializeField] bool canDoubleJump = true;
+    [Header("Parkour Movement")]
+    public float RunSpeed = 12f;
+    [Tooltip("Curve X is time (0 to 1), Y is speed multiplier (0 to 1). Make it start steep and flatten out.")]
+    public AnimationCurve AccelerationCurve = AnimationCurve.EaseInOut(0, 0, 1, 1);
+    public float AccelerationTime = 0.5f;
+    public float DecelerationRate = 5f; // How fast you lose dash/jump boost speed
 
-    [Header("Dash Parameters")]
-    [SerializeField] float DashSpeed = 25f;
-    [SerializeField] float DashDuration = 0.2f;
-    [SerializeField] float DashCooldown = 0.8f;
-    private float dashTimeLeft = 0f;
-    private float dashCooldownLeft = 0f;
-    private bool isDashing = false;
+    [Header("Sliding")]
+    public float SlideSpeed = 18f;
+    public float SlideAccelerationRate = 4f;
+    public float StandHeight = 2f;
+    public float CrouchHeight = 1f;
+
+    [Header("Dashing")]
+    public float DashSpeed = 30f;
+
+    [Header("Jumping")]
+    [SerializeField] float JumpHeight = 2f;
+    [SerializeField] float JumpSpeedBoost = 4f;
+    [SerializeField] bool canDoubleJump = true;
+    private int timesJumped = 0;
 
     [Header("Look Parameters")]
     public Vector2 LookSensitivity = new Vector2(0.1f, 0.1f);
     public float pitchLimit = 85f;
-    [SerializeField] float currentPitch = 0f;
+    private float currentPitch = 0f;
     public float CurrentPitch
     {
         get => currentPitch;
-        set
-        {
-            currentPitch = Mathf.Clamp(value, -pitchLimit, pitchLimit);
-        }
+        set => currentPitch = Mathf.Clamp(value, -pitchLimit, pitchLimit);
     }
 
     [Header("Camera")]
     [SerializeField] float CameraNormalFOV = 60f;
-    [SerializeField] float CameraSprintFOV = 80f;
-    [SerializeField] float CameraFOVSmoothing = 1f;
+    [SerializeField] float CameraBoostFOV = 90f; // FOV expands during dash/slide
+    [SerializeField] float CameraFOVSmoothing = 5f;
+    [SerializeField] float CameraStandHeight = 0.8f; // Head position when standing
+    [SerializeField] float CameraCrouchHeight = 0.1f; // Head position when sliding
 
     [Header("Physics")]
     [SerializeField] float GravityScale = 3f;
@@ -48,31 +51,11 @@ public class FPController : MonoBehaviour
     public float CurrentSpeed { get; private set; }
     public bool WasGrounded = false;
     public bool IsGrounded => characterController.isGrounded;
-    private float normalHeight;
-    private float targetHeight;
 
-    [Header("Crouch & Slide")]
-    [SerializeField] float CrouchHeight = 1.2f;
-    [SerializeField] float CrouchTransitionSpeed = 15f;
-    [SerializeField] float CrouchSpeedMultiplier = 0.7f;
-    [SerializeField] float SlideSpeedMultiplier = 2.5f;
-    [SerializeField] float SlideThresholdSpeed = 4f;
-    [SerializeField] float SlideBoost = 1.3f;
-    public bool CrouchInput;
-    private bool isCrouching = false;
-    private bool isSliding = false;
-    private bool wasSliding = false;
-
-    [Header("Wall Climb")]
-    [SerializeField] LayerMask climbableWalls;
-    [SerializeField] float WallCheckDistance = 1f;
-    [SerializeField] float WallCheckHeightOffset = 1.2f;
-    [SerializeField] float WallClimbHeight = 2.5f;
-    [SerializeField] float WallClimbPushForce = 8f;
-
-    [Header("Input")]
+    [Header("Input States")]
     public Vector2 MoveInput;
     public Vector2 LookInput;
+    public bool SlideInput;
 
     [Header("Components")]
     [SerializeField] CinemachineCamera fpCamera;
@@ -81,24 +64,22 @@ public class FPController : MonoBehaviour
     [Header("Events")]
     public UnityEvent Landed;
 
-    void Awake()
-    {
-        characterController = GetComponent<CharacterController>();
-        normalHeight = characterController.height;
-        targetHeight = normalHeight;
-    }
+    private float moveTimer = 0f;
 
     void OnValidate()
     {
         if (characterController == null)
-        {
             characterController = GetComponent<CharacterController>();
-        }
+    }
+
+    void Start()
+    {
+        characterController.height = StandHeight;
     }
 
     void Update()
     {
-        CrouchUpdate();
+        HandleSlidingHeight();
         MoveUpdate();
         LookUpdate();
         CameraUpdate();
@@ -106,106 +87,56 @@ public class FPController : MonoBehaviour
         if (!WasGrounded && IsGrounded)
         {
             timesJumped = 0;
-            Landed.Invoke();
+            Landed?.Invoke();
         }
 
         WasGrounded = IsGrounded;
-
-        // DEBUG: Visualize wall rays (Scene/Game view)
-        Vector3 origin = transform.position + Vector3.up * WallCheckHeightOffset;
-        Vector3 fwd = transform.forward;
-        Vector3 fwdLeft = Quaternion.AngleAxis(-30f, Vector3.up) * fwd;
-        Vector3 fwdRight = Quaternion.AngleAxis(30f, Vector3.up) * fwd;
-        Debug.DrawRay(origin, fwd * WallCheckDistance, Color.red);
-        Debug.DrawRay(origin, fwdLeft * WallCheckDistance, Color.yellow);
-        Debug.DrawRay(origin, fwdRight * WallCheckDistance, Color.green);
-    }
-
-    void CrouchUpdate()
-    {
-        bool wantsCrouch = CrouchInput;
-
-        Vector3 rayStart = transform.position + characterController.center;
-        float rayDistance = normalHeight - characterController.height + 0.1f;
-        bool hasHeadroom = !Physics.Raycast(rayStart, Vector3.up, rayDistance);
-
-        if (wantsCrouch)
-        {
-            if (!isCrouching)
-            {
-                targetHeight = CrouchHeight;
-            }
-        }
-        else
-        {
-            if (isCrouching && hasHeadroom)
-            {
-                targetHeight = normalHeight;
-            }
-        }
-
-        float newHeight = Mathf.Lerp(characterController.height, targetHeight, CrouchTransitionSpeed * Time.deltaTime);
-        characterController.height = newHeight;
-        characterController.center = new Vector3(0f, newHeight / 2f, 0f);
-        isCrouching = newHeight < (normalHeight + CrouchHeight) * 0.5f;
     }
 
     void MoveUpdate()
     {
-        // Dash handling
-        dashCooldownLeft = Mathf.Max(0f, dashCooldownLeft - Time.deltaTime);
-        if (isDashing)
+        // 1. Determine Input Direction
+        Vector3 inputDirection = transform.forward * MoveInput.y + transform.right * MoveInput.x;
+        inputDirection.y = 0f;
+        inputDirection.Normalize();
+
+        bool hasInput = MoveInput.sqrMagnitude >= 0.01f;
+
+        // 2. Calculate Speed
+        if (hasInput)
         {
-            dashTimeLeft -= Time.deltaTime;
-            if (dashTimeLeft <= 0f)
+            moveTimer += Time.deltaTime;
+            float curveValue = AccelerationCurve.Evaluate(Mathf.Clamp01(moveTimer / AccelerationTime));
+            float targetSpeed = SlideInput ? SlideSpeed : RunSpeed;
+
+            if (CurrentSpeed > targetSpeed)
             {
-                isDashing = false;
+                // Decelerate from a Dash, Jump boost, or Slide release
+                CurrentSpeed = Mathf.Lerp(CurrentSpeed, targetSpeed, DecelerationRate * Time.deltaTime);
             }
-        }
-
-        Vector3 motion = transform.forward * MoveInput.y + transform.right * MoveInput.x;
-        motion.y = 0f;
-        motion.Normalize();
-
-        float horizSpeed = CurrentVelocity.magnitude;
-        bool wantSlide = CrouchInput && IsGrounded && horizSpeed >= SlideThresholdSpeed;
-        if (wantSlide)
-        {
-            isSliding = true;
-        }
-        else
-        {
-            isSliding = false;
-        }
-
-        if (!isDashing)
-        {
-            if (motion.sqrMagnitude >= 0.01f)
+            else if (SlideInput)
             {
-                float targetHorizontalSpeed = RunSpeed;
-                if (isSliding)
-                {
-                    targetHorizontalSpeed *= SlideSpeedMultiplier;
-                }
-                else if (isCrouching)
-                {
-                    targetHorizontalSpeed *= CrouchSpeedMultiplier;
-                }
-
-                // Accelerate toward desired direction (smooth start)
-                CurrentVelocity = Vector3.MoveTowards(CurrentVelocity, motion * targetHorizontalSpeed, Acceleration * Time.deltaTime);
+                // Accelerate smoothly up to slide speed
+                CurrentSpeed = Mathf.Lerp(CurrentSpeed, targetSpeed, SlideAccelerationRate * Time.deltaTime);
             }
             else
             {
-                // No input  decelerate quickly (snappy stop)
-                float decelRate = Deceleration;
-                // Optional: even stronger stop when grounded (feels more "planted")
-                if (IsGrounded) decelRate *= 1.5f;
-
-                CurrentVelocity = Vector3.MoveTowards(CurrentVelocity, Vector3.zero, decelRate * Time.deltaTime);
+                // Accelerate using the Unity Curve up to max run speed
+                CurrentSpeed = curveValue * RunSpeed;
             }
+
+            // Apply direction
+            CurrentVelocity = inputDirection * CurrentSpeed;
+        }
+        else
+        {
+            // Instant stop when letting go of keys
+            CurrentSpeed = 0f;
+            moveTimer = 0f;
+            CurrentVelocity = Vector3.zero;
         }
 
+        // Handle Gravity
         if (IsGrounded && VerticalVelocity <= 0.01f)
         {
             VerticalVelocity = -3f;
@@ -215,106 +146,79 @@ public class FPController : MonoBehaviour
             VerticalVelocity += Physics.gravity.y * GravityScale * Time.deltaTime;
         }
 
+        //  Move Controller
         Vector3 fullVelocity = new Vector3(CurrentVelocity.x, VerticalVelocity, CurrentVelocity.z);
         CollisionFlags flags = characterController.Move(fullVelocity * Time.deltaTime);
 
+        // Ceiling bonk prevention
         if (((flags & CollisionFlags.Above) != 0) && (VerticalVelocity > 0.01f))
         {
             VerticalVelocity = 0f;
         }
+    }
 
-        CurrentSpeed = CurrentVelocity.magnitude;
+    void HandleSlidingHeight()
+    {
+        float targetHeight = SlideInput ? CrouchHeight : StandHeight;
+        characterController.height = Mathf.Lerp(characterController.height, targetHeight, 10f * Time.deltaTime);
 
-        // Slide boost on enter
-        if (isSliding && !wasSliding)
-        {
-            CurrentVelocity *= SlideBoost;
-        }
-        wasSliding = isSliding;
+        // Correctly calculates the center
+        float currentCenterY = (characterController.height - StandHeight) / 2f;
+        characterController.center = new Vector3(0, currentCenterY, 0);
     }
 
     public void TryJump()
     {
-        // Wall climb check
-        Vector3 origin = transform.position + Vector3.up * WallCheckHeightOffset;
-        Vector3 fwd = transform.forward;
-        Vector3 fwdLeft = Quaternion.AngleAxis(-30f, Vector3.up) * fwd;
-        Vector3 fwdRight = Quaternion.AngleAxis(30f, Vector3.up) * fwd;
-        if (Physics.Raycast(origin, fwd, WallCheckDistance, climbableWalls) ||
-            Physics.Raycast(origin, fwdLeft, WallCheckDistance, climbableWalls) ||
-            Physics.Raycast(origin, fwdRight, WallCheckDistance, climbableWalls))
+        if (!IsGrounded)
         {
-            VerticalVelocity = Mathf.Sqrt(WallClimbHeight * -2f * Physics.gravity.y * GravityScale);
-            CurrentVelocity += fwd * WallClimbPushForce;
-            return;
-        }
-
-        if (IsGrounded == false)
-        {
-            if (canDoubleJump && timesJumped < 2 && VerticalVelocity > 0.01f)
-            {
-                return;
-            }
-            if (!canDoubleJump || timesJumped >= 2)
-            {
-                return;
-            }
+            // Removed the VerticalVelocity > 0.01f check so you can double jump on the way down
+            if (!canDoubleJump || timesJumped >= 2) return;
         }
 
         VerticalVelocity = Mathf.Sqrt(JumpHeight * -2f * Physics.gravity.y * GravityScale);
         timesJumped++;
+
+        // Small speed boost on jump that will naturally decelerate in MoveUpdate
+        if (MoveInput.sqrMagnitude > 0.01f)
+        {
+            CurrentSpeed += JumpSpeedBoost;
+        }
     }
 
     public void TryDash()
     {
-        if (dashCooldownLeft > 0f || isDashing) return;
-
-        isDashing = true;
-        dashTimeLeft = DashDuration;
-        dashCooldownLeft = DashCooldown;
-
-        Vector3 dashDir = transform.forward * MoveInput.y + transform.right * MoveInput.x;
-        dashDir.y = 0f;
-        if (dashDir.sqrMagnitude > 0.01f)
+        // Only dash if we are pressing a movement key (WASD dictates direction)
+        if (MoveInput.sqrMagnitude >= 0.01f)
         {
-            dashDir.Normalize();
+            CurrentSpeed = DashSpeed;
+            // MoveUpdate will handle decelerating this smoothly back to RunSpeed
         }
-        else
-        {
-            dashDir = transform.forward;
-            dashDir.y = 0f;
-            dashDir.Normalize();
-        }
-        CurrentVelocity = dashDir * DashSpeed;
     }
 
     void LookUpdate()
     {
         Vector2 input = new Vector2(LookInput.x * LookSensitivity.x, LookInput.y * LookSensitivity.y);
-        //look up and down
+
         CurrentPitch -= input.y;
         fpCamera.transform.localRotation = Quaternion.Euler(CurrentPitch, 0f, 0f);
-        //look left and right
         transform.Rotate(Vector3.up * input.x);
     }
 
     void CameraUpdate()
     {
-        float FOV = CameraNormalFOV;
-        float fovRatio = 0f;
-        if (isDashing)
+        // FOV
+        float targetFOV = CameraNormalFOV;
+        if (CurrentSpeed > RunSpeed)
         {
-            fovRatio = 1f;
+            float speedRatio = (CurrentSpeed - RunSpeed) / (DashSpeed - RunSpeed);
+            targetFOV = Mathf.Lerp(CameraNormalFOV, CameraBoostFOV, speedRatio);
         }
-        else if (isSliding)
-        {
-            fovRatio = Mathf.Clamp01(CurrentSpeed / (RunSpeed * SlideSpeedMultiplier));
-        }
-        else
-        {
-            fovRatio = Mathf.Clamp01(CurrentSpeed / RunSpeed);
-        }
-        FOV = Mathf.Lerp(CameraNormalFOV, CameraSprintFOV, fovRatio);
-        fpCamera.Lens.FieldOfView = Mathf.Lerp(fpCamera.Lens.FieldOfView, FOV, Time.deltaTime * CameraFOVSmoothing);
+        fpCamera.Lens.FieldOfView = Mathf.Lerp(fpCamera.Lens.FieldOfView, targetFOV, Time.deltaTime * CameraFOVSmoothing);
+
+        //  Handle Camera Vertical Position 
+        float targetCamHeight = SlideInput ? CameraCrouchHeight : CameraStandHeight;
+        Vector3 camPos = fpCamera.transform.localPosition;
+        camPos.y = Mathf.Lerp(camPos.y, targetCamHeight, 10f * Time.deltaTime);
+        fpCamera.transform.localPosition = camPos;
     }
 }
