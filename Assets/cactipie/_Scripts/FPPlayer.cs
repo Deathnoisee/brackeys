@@ -1,12 +1,23 @@
 using UnityEngine;
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine.InputSystem;
 
+[RequireComponent(typeof(FPController))]
 public class FPPlayer : MonoBehaviour
 {
     [Header("Components")]
     [SerializeField] FPController FPController;
+
+    void OnValidate()
+    {
+        if (FPController == null)
+            FPController = GetComponent<FPController>();
+    }
+
+    void Start()
+    {
+        Cursor.visible = false;
+        Cursor.lockState = CursorLockMode.Locked;
+    }
 
     void OnMove(InputValue Value)
     {
@@ -26,11 +37,6 @@ public class FPPlayer : MonoBehaviour
         }
     }
 
-    void OnCrouch(InputValue Value)
-    {
-        FPController.CrouchInput = Value.isPressed;
-    }
-
     void OnDash(InputValue Value)
     {
         if (Value.isPressed)
@@ -39,15 +45,9 @@ public class FPPlayer : MonoBehaviour
         }
     }
 
-    void OnValidate()
+    void OnSlide(InputValue Value)
     {
-        if (FPController == null)
-            FPController = GetComponent<FPController>();
-    }
-
-    void Start()
-    {
-        Cursor.visible = false;
-        Cursor.lockState = CursorLockMode.Locked;
+        // Holding the button keeps it true, releasing makes it false
+        FPController.SlideInput = Value.isPressed;
     }
 }
