@@ -2,81 +2,76 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using System.Collections;
 
-public class GravityRing : MonoBehaviour
+public class gravityRing : MonoBehaviour
 {
     [SerializeField] private float bufferDuration = 0.5f;
+    [SerializeField] private float slowMotionScale = 0.1f;
+    [SerializeField] private float gravityForce = 9.8f;
 
-    private Vector3 currentGravity = Vector3.down;
-    private bool inGravityRing = false;
-    private bool gravitySelectionActive = false;
-
-    private PlayerInput playerInput; 
-    private CharacterController characterController; 
-
-    private void Start()
-    {
-        playerInput = GetComponent<PlayerInput>();
-        characterController = GetComponent<CharacterController>();
-    }
+    private bool isBufferActive = false;
+    private Transform playerTransform;
+    private Coroutine bufferCoroutine;
+    private FPPlayer fpPlayer;
+    private FPController fpController;
 
     private void OnTriggerEnter(Collider other)
     {
-        if (other.CompareTag("GravityRing"))
+        if (other.CompareTag("Player"))
         {
-            inGravityRing = true;
-            gravitySelectionActive = true;
+            playerTransform = other.transform;
+            fpPlayer = other.GetComponent<FPPlayer>();
+            fpController = other.GetComponent<FPController>();
 
-            StartCoroutine(GravitySelectionBuffer());
+            if (fpPlayer != null)
+                //    fpPlayer.OnMoveInput += HandleDirectionInput;
+
+                bufferCoroutine = StartCoroutine(ActivateGravityBuffer());
         }
     }
 
-    private void Update()
+    private void HandleDirectionInput(Vector2 input)
     {
-        if (gravitySelectionActive)
-        {
-            Vector2 input = playerInput.actions["Move"].ReadValue<Vector2>();
+        if (!isBufferActive) return;
 
-            if (input.y > 0) 
-            {
-                SetGravity(Vector3.up);
-            }
-            else if (input.y < 0)
-            {
-                SetGravity(Vector3.down);
-            }
-            else if (input.x > 0) 
-            {
-                SetGravity(Vector3.right);
-            }
-            else if (input.x < 0)
-            {
-                SetGravity(Vector3.left);
-            }
-        }
-
-        if (!gravitySelectionActive)
-        {
-            //characterController.gameObject.GetComponent<FPController>().setGravity(currentGravity);
-        }
+        if (input.y > 0.5f)      EndBufferAndSetGravity(Vector3.up);
+        else if (input.y < -0.5f) EndBufferAndSetGravity(Vector3.down);
+        else if (input.x < -0.5f) EndBufferAndSetGravity(Vector3.left);
+        else if (input.x > 0.5f)  EndBufferAndSetGravity(Vector3.right);
     }
 
-    private void SetGravity(Vector3 newGravity)
+    private void EndBufferAndSetGravity(Vector3 gravityDirection)
     {
-        currentGravity = newGravity;
-        gravitySelectionActive = false; 
+        if (!isBufferActive) return;
+
+        isBufferActive = false;
+
+        if (bufferCoroutine != null)
+            StopCoroutine(bufferCoroutine);
+
+        if (fpPlayer != null)
+            // fpPlayer.OnMoveInput -= HandleDirectionInput;
+
+            // Restore time
+            Time.timeScale = 1f;
+        Time.fixedDeltaTime = 0.02f;
+
+        // Apply the new gravity direction
+        if (fpController != null)
+            // fpController.SetGravityDirection(gravityDirection * gravityForce);
+
+            Destroy(gameObject);
     }
 
-    private IEnumerator GravitySelectionBuffer()
+    private IEnumerator ActivateGravityBuffer()
     {
-        yield return new WaitForSeconds(bufferDuration);
+        Time.timeScale = slowMotionScale;
+        Time.fixedDeltaTime = 0.02f * Time.timeScale;
 
+        isBufferActive = true;
 
-        if (gravitySelectionActive)
-        {
-            SetGravity(Vector3.down);
-        }
+        yield return new WaitForSecondsRealtime(bufferDuration);
 
-        inGravityRing = false;
-        Destroy(gameObject);
+        if (isBufferActive)
+            EndBufferAndSetGravity(Vector3.down);
     }
 }
