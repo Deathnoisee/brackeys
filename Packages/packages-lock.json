@@ -155,7 +155,7 @@
     },
     "com.unity.probuilder": {
       "version": "6.0.9",
-      "depth": 1,
+      "depth": 0,
       "source": "registry",
       "dependencies": {
         "com.unity.shadergraph": "17.0.3",
@@ -206,7 +206,7 @@
     },
     "com.unity.settings-manager": {
       "version": "2.1.1",
-      "depth": 2,
+      "depth": 1,
       "source": "registry",
       "dependencies": {},
       "url": "https://packages.unity.com"

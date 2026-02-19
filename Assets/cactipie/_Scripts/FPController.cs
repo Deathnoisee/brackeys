@@ -9,7 +9,7 @@ public class FPController : MonoBehaviour
 {
     [Header("Movement Parameters")]
     public float Acceleration = 25f;          //  increased a bit for snappier feel overall (tune down if too quick)
-    [SerializeField] float Deceleration = 60f; //  NEW: much higher for quick stops (40–80 range works well)
+    [SerializeField] float Deceleration = 60f; //  NEW: much higher for quick stops (40ï¿½80 range works well)
     [SerializeField] float RunSpeed = 8f;
     [SerializeField] float JumpHeight = 2f;
     private int timesJumped = 0;
@@ -62,6 +62,7 @@ public class FPController : MonoBehaviour
     private bool isCrouching = false;
     private bool isSliding = false;
     private bool wasSliding = false;
+    
 
     [Header("Wall Climb")]
     [SerializeField] LayerMask climbableWalls;
@@ -98,7 +99,7 @@ public class FPController : MonoBehaviour
 
     void Update()
     {
-        CrouchUpdate();
+        // CrouchUpdate();
         MoveUpdate();
         LookUpdate();
         CameraUpdate();

@@ -1,9 +1,11 @@
 using UnityEngine;
 
 public class MomentumMeter : MonoBehaviour
-{   // velocity increases the meter so constant checking for velocity to increase the meter, 10 velocity = 1 point per sec, 100 velocity = 10 points, 
+{   
+    // velocity increases the meter so constant checking for velocity to increase the meter, 10 velocity = 1 point per sec, 100 velocity = 10 points, 
     [SerializeField] private float velocityToMeterRatio = 0.1f; 
     [SerializeField] private float maxMeterValue = 450f;
+    [SerializeField] private float decayRate = 5f;
     private float currentMeter = 0f;
     private CharacterController characterController;
 
@@ -20,8 +22,7 @@ public class MomentumMeter : MonoBehaviour
         currentMeter += velocityMagnitude * velocityToMeterRatio * Time.deltaTime;
         } else if (velocityMagnitude == 0f && currentMeter > 0f)
         {
-            
-            currentMeter -= 5f * Time.deltaTime;
+            currentMeter -= decayRate * Time.deltaTime;
         }
         currentMeter = Mathf.Clamp(currentMeter, 0f, maxMeterValue);
     }
