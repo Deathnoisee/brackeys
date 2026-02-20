@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 4816d83fbe4d8f84591f819d5bcc5e2d
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 216656
+  packageName: "Extrude Mesh Along B\xE9zier Tool"
+  packageVersion: 1.0.0
+  assetPath: Assets/ExtrudeMeshAlongBezierTool/Examples/Materials/SpikedRoadMaterial.mat
+  uploadId: 491280
