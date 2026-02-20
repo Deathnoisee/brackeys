@@ -17,6 +17,11 @@ public class FPController : MonoBehaviour
     public float SlideAccelerationRate = 4f;
     public float StandHeight = 2f;
     public float CrouchHeight = 1f;
+    private bool isSlideLocked = false;
+    public float SlideDuration = 0.8f; // How long the speed boost lasts
+    private float slideTimer;
+    private Vector3 slideDirection;
+    private bool isSliding = false;
 
     [Header("Dashing")]
     public float DashSpeed = 30f;
@@ -26,6 +31,7 @@ public class FPController : MonoBehaviour
     [SerializeField] float JumpSpeedBoost = 4f;
     [SerializeField] bool canDoubleJump = true;
     private int timesJumped = 0;
+    public float AirControl = 15f; // How much you can steer while jumping
 
     [Header("Look Parameters")]
     public Vector2 LookSensitivity = new Vector2(0.1f, 0.1f);
@@ -102,41 +108,92 @@ public class FPController : MonoBehaviour
 
         bool hasInput = MoveInput.sqrMagnitude >= 0.01f;
 
-        // 2. Calculate Speed
-        if (hasInput)
+        // 2. STATE: SLIDING
+        // We check if we are grounded, holding Ctrl, moving fast enough, and not locked out
+        if (IsGrounded && SlideInput && !isSlideLocked && (CurrentSpeed > 0.1f || hasInput))
         {
-            moveTimer += Time.deltaTime;
-            float curveValue = AccelerationCurve.Evaluate(Mathf.Clamp01(moveTimer / AccelerationTime));
-            float targetSpeed = SlideInput ? SlideSpeed : RunSpeed;
-
-            if (CurrentSpeed > targetSpeed)
+            if (!isSliding)
             {
-                // Decelerate from a Dash, Jump boost, or Slide release
-                CurrentSpeed = Mathf.Lerp(CurrentSpeed, targetSpeed, DecelerationRate * Time.deltaTime);
+                // Lock in the slide direction the moment we hit Ctrl
+                isSliding = true;
+                slideDirection = hasInput ? inputDirection : transform.forward;
+                CurrentSpeed = SlideSpeed;
+                slideTimer = 0f;
             }
-            else if (SlideInput)
+
+            slideTimer += Time.deltaTime;
+
+            if (slideTimer < SlideDuration)
             {
-                // Accelerate smoothly up to slide speed
-                CurrentSpeed = Mathf.Lerp(CurrentSpeed, targetSpeed, SlideAccelerationRate * Time.deltaTime);
+                // Maintain burst speed
+                CurrentSpeed = SlideSpeed;
             }
             else
             {
-                // Accelerate using the Unity Curve up to max run speed
-                CurrentSpeed = curveValue * RunSpeed;
+                // Decelerate down to 0
+                CurrentSpeed = Mathf.MoveTowards(CurrentSpeed, 0f, DecelerationRate * Time.deltaTime);
+
+                if (CurrentSpeed <= 0.01f)
+                {
+                    CurrentSpeed = 0f;
+                    isSlideLocked = true; // Lock until keys are released
+                }
             }
 
-            // Apply direction
-            CurrentVelocity = inputDirection * CurrentSpeed;
+            // Apply movement strictly along the locked slide direction, ignoring WASD changes
+            CurrentVelocity = slideDirection * CurrentSpeed;
         }
         else
         {
-            // Instant stop when letting go of keys
-            CurrentSpeed = 0f;
-            moveTimer = 0f;
-            CurrentVelocity = Vector3.zero;
+            isSliding = false;
+
+            // 3. STATE: GROUNDED & RUNNING
+            if (IsGrounded)
+            {
+                if (hasInput && !isSlideLocked)
+                {
+                    moveTimer += Time.deltaTime;
+                    float curveValue = AccelerationCurve.Evaluate(Mathf.Clamp01(moveTimer / AccelerationTime));
+
+                    if (CurrentSpeed > RunSpeed)
+                    {
+                        // Smoothly bleed off excess speed from a jump/dash landing
+                        CurrentSpeed = Mathf.MoveTowards(CurrentSpeed, RunSpeed, DecelerationRate * Time.deltaTime);
+                    }
+                    else
+                    {
+                        // Normal acceleration
+                        CurrentSpeed = curveValue * RunSpeed;
+                    }
+
+                    CurrentVelocity = inputDirection * CurrentSpeed;
+                }
+                else
+                {
+                    // Instant stop ONLY if we are on the ground and not sliding
+                    CurrentSpeed = 0f;
+                    moveTimer = 0f;
+                    slideTimer = 0f;
+                    CurrentVelocity = Vector3.zero;
+
+                    if (!hasInput) isSlideLocked = false; // Reset the slide lock when hands leave keys
+                }
+            }
+            // 4. STATE: AIRBORNE (JUMPING/FALLING)
+            else
+            {
+                if (hasInput)
+                {
+                    // Allow slight steering in the air without instantly changing direction
+                    Vector3 targetVelocity = inputDirection * CurrentSpeed;
+                    CurrentVelocity = Vector3.MoveTowards(CurrentVelocity, targetVelocity, AirControl * Time.deltaTime);
+                }
+                // IF NO INPUT: We do absolutely nothing to CurrentVelocity horizontally. 
+                // This preserves your exact momentum through the air!
+            }
         }
 
-        // Handle Gravity
+        // 5. Handle Gravity
         if (IsGrounded && VerticalVelocity <= 0.01f)
         {
             VerticalVelocity = -3f;
@@ -146,7 +203,7 @@ public class FPController : MonoBehaviour
             VerticalVelocity += Physics.gravity.y * GravityScale * Time.deltaTime;
         }
 
-        //  Move Controller
+        // 6. Move Controller
         Vector3 fullVelocity = new Vector3(CurrentVelocity.x, VerticalVelocity, CurrentVelocity.z);
         CollisionFlags flags = characterController.Move(fullVelocity * Time.deltaTime);
 
@@ -155,6 +212,10 @@ public class FPController : MonoBehaviour
         {
             VerticalVelocity = 0f;
         }
+
+        // 7. Recalculate CurrentSpeed based on actual physical momentum 
+        // (This keeps the Camera FOV correctly boosted while flying through the air)
+        CurrentSpeed = new Vector3(CurrentVelocity.x, 0, CurrentVelocity.z).magnitude;
     }
 
     void HandleSlidingHeight()
