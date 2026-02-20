@@ -135,6 +135,7 @@ GameObject:
   - component: {fileID: 120707389}
   - component: {fileID: 120707388}
   - component: {fileID: 120707394}
+  - component: {fileID: 120707395}
   m_Layer: 0
   m_Name: player
   m_TagString: Untagged
@@ -201,17 +202,14 @@ MonoBehaviour:
   SlideAccelerationRate: 4
   StandHeight: 2
   CrouchHeight: 1
+  SlideDuration: 0.8
   DashSpeed: 30
   JumpHeight: 2
   JumpSpeedBoost: 4
   canDoubleJump: 1
+  AirControl: 10
   LookSensitivity: {x: 0.1, y: 0.1}
   pitchLimit: 85
-  CameraNormalFOV: 60
-  CameraBoostFOV: 90
-  CameraFOVSmoothing: 5
-  CameraStandHeight: 0.8
-  CameraCrouchHeight: 0.1
   GravityScale: 3
   VerticalVelocity: 0
   WasGrounded: 0
@@ -371,6 +369,32 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FPPlayer
   FPController: {fileID: 120707388}
+--- !u!114 &120707395
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 120707386}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 163d39121233c6143b2afc01ca4b93e3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CameraEffects
+  playerController: {fileID: 120707388}
+  fpCamera: {fileID: 366908651}
+  standHeight: 0.8
+  crouchHeight: 0.05
+  heightSmoothSpeed: 10
+  normalFOV: 60
+  boostFOV: 90
+  fovSmoothTime: 0.5
+  bobFrequency: 12
+  bobAmplitude: 0.05
+  landingDipAmount: 0.4
+  landingRecoverSpeed: 8
+  speedBlurVolume: {fileID: 1910919410}
+  maxBlurSpeed: 30
 --- !u!43 &202690699
 Mesh:
   m_ObjectHideFlags: 0
@@ -1578,6 +1602,55 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1910919409
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1910919411}
+  - component: {fileID: 1910919410}
+  m_Layer: 0
+  m_Name: motionblur
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1910919410
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1910919409}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 172515602e62fb746b5d573b38a5fe58, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.RenderPipelines.Core.Runtime::UnityEngine.Rendering.Volume
+  m_IsGlobal: 1
+  priority: 0
+  blendDistance: 0
+  weight: 0
+  sharedProfile: {fileID: 11400000, guid: 0657b83b162e4a944aa1ee5159f8ea15, type: 2}
+--- !u!4 &1910919411
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1910919409}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 1, z: -7}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!43 &1986318397
 Mesh:
   m_ObjectHideFlags: 0
@@ -1765,3 +1838,4 @@ SceneRoots:
   - {fileID: 1837893751}
   - {fileID: 120707387}
   - {fileID: 1701345112}
+  - {fileID: 1910919411}
