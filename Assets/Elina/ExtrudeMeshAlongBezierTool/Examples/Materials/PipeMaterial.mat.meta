@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 23961c33ce97e9d4f9b1af1d9bfe01b9
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 216656
+  packageName: "Extrude Mesh Along B\xE9zier Tool"
+  packageVersion: 1.0.0
+  assetPath: Assets/ExtrudeMeshAlongBezierTool/Examples/Materials/PipeMaterial.mat
+  uploadId: 491280

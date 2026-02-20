@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: fe57f0a80a6b27b449d9134a0d594534
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 216656
+  packageName: "Extrude Mesh Along B\xE9zier Tool"
+  packageVersion: 1.0.0
+  assetPath: Assets/ExtrudeMeshAlongBezierTool/Examples/Materials/SpikedCylinderMaterial.mat
+  uploadId: 491280
