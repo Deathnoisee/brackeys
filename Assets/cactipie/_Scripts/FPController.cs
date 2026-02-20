@@ -43,13 +43,6 @@ public class FPController : MonoBehaviour
         set => currentPitch = Mathf.Clamp(value, -pitchLimit, pitchLimit);
     }
 
-    [Header("Camera")]
-    [SerializeField] float CameraNormalFOV = 60f;
-    [SerializeField] float CameraBoostFOV = 90f; // FOV expands during dash/slide
-    [SerializeField] float CameraFOVSmoothing = 5f;
-    [SerializeField] float CameraStandHeight = 0.8f; // Head position when standing
-    [SerializeField] float CameraCrouchHeight = 0.1f; // Head position when sliding
-
     [Header("Physics")]
     [SerializeField] float GravityScale = 3f;
     public float VerticalVelocity = 0f;
@@ -88,7 +81,6 @@ public class FPController : MonoBehaviour
         HandleSlidingHeight();
         MoveUpdate();
         LookUpdate();
-        CameraUpdate();
 
         if (!WasGrounded && IsGrounded)
         {
@@ -101,14 +93,14 @@ public class FPController : MonoBehaviour
 
     void MoveUpdate()
     {
-        // 1. Determine Input Direction
+        //Determine Input Direction
         Vector3 inputDirection = transform.forward * MoveInput.y + transform.right * MoveInput.x;
         inputDirection.y = 0f;
         inputDirection.Normalize();
 
         bool hasInput = MoveInput.sqrMagnitude >= 0.01f;
 
-        // 2. STATE: SLIDING
+        //SLIDING
         // We check if we are grounded, holding Ctrl, moving fast enough, and not locked out
         if (IsGrounded && SlideInput && !isSlideLocked && (CurrentSpeed > 0.1f || hasInput))
         {
@@ -140,14 +132,14 @@ public class FPController : MonoBehaviour
                 }
             }
 
-            // Apply movement strictly along the locked slide direction, ignoring WASD changes
+            // Apply movement strictly along the locked slide direction
             CurrentVelocity = slideDirection * CurrentSpeed;
         }
         else
         {
             isSliding = false;
 
-            // 3. STATE: GROUNDED & RUNNING
+            // GROUNDED & RUNNING
             if (IsGrounded)
             {
                 if (hasInput && !isSlideLocked)
@@ -179,7 +171,7 @@ public class FPController : MonoBehaviour
                     if (!hasInput) isSlideLocked = false; // Reset the slide lock when hands leave keys
                 }
             }
-            // 4. STATE: AIRBORNE (JUMPING/FALLING)
+            // JUMPING/FALLING
             else
             {
                 if (hasInput)
@@ -189,11 +181,11 @@ public class FPController : MonoBehaviour
                     CurrentVelocity = Vector3.MoveTowards(CurrentVelocity, targetVelocity, AirControl * Time.deltaTime);
                 }
                 // IF NO INPUT: We do absolutely nothing to CurrentVelocity horizontally. 
-                // This preserves your exact momentum through the air!
+                
             }
         }
 
-        // 5. Handle Gravity
+        // Handle Gravity
         if (IsGrounded && VerticalVelocity <= 0.01f)
         {
             VerticalVelocity = -3f;
@@ -203,7 +195,7 @@ public class FPController : MonoBehaviour
             VerticalVelocity += Physics.gravity.y * GravityScale * Time.deltaTime;
         }
 
-        // 6. Move Controller
+        //  Move Controller
         Vector3 fullVelocity = new Vector3(CurrentVelocity.x, VerticalVelocity, CurrentVelocity.z);
         CollisionFlags flags = characterController.Move(fullVelocity * Time.deltaTime);
 
@@ -213,8 +205,7 @@ public class FPController : MonoBehaviour
             VerticalVelocity = 0f;
         }
 
-        // 7. Recalculate CurrentSpeed based on actual physical momentum 
-        // (This keeps the Camera FOV correctly boosted while flying through the air)
+        //Recalculate CurrentSpeed 
         CurrentSpeed = new Vector3(CurrentVelocity.x, 0, CurrentVelocity.z).magnitude;
     }
 
@@ -265,21 +256,4 @@ public class FPController : MonoBehaviour
         transform.Rotate(Vector3.up * input.x);
     }
 
-    void CameraUpdate()
-    {
-        // FOV
-        float targetFOV = CameraNormalFOV;
-        if (CurrentSpeed > RunSpeed)
-        {
-            float speedRatio = (CurrentSpeed - RunSpeed) / (DashSpeed - RunSpeed);
-            targetFOV = Mathf.Lerp(CameraNormalFOV, CameraBoostFOV, speedRatio);
-        }
-        fpCamera.Lens.FieldOfView = Mathf.Lerp(fpCamera.Lens.FieldOfView, targetFOV, Time.deltaTime * CameraFOVSmoothing);
-
-        //  Handle Camera Vertical Position 
-        float targetCamHeight = SlideInput ? CameraCrouchHeight : CameraStandHeight;
-        Vector3 camPos = fpCamera.transform.localPosition;
-        camPos.y = Mathf.Lerp(camPos.y, targetCamHeight, 10f * Time.deltaTime);
-        fpCamera.transform.localPosition = camPos;
-    }
 }
