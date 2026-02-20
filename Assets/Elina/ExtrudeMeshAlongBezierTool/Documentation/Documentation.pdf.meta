@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 6141191ebfe0aaf4b8484af5140e68c0
+DefaultImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 216656
+  packageName: "Extrude Mesh Along B\xE9zier Tool"
+  packageVersion: 1.0.0
+  assetPath: Assets/ExtrudeMeshAlongBezierTool/Documentation/Documentation.pdf
+  uploadId: 491280
