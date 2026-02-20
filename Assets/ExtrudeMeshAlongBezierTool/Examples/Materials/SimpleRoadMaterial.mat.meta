@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: a2774e208c1788b4b9e5b9fc405d4273
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 216656
+  packageName: "Extrude Mesh Along B\xE9zier Tool"
+  packageVersion: 1.0.0
+  assetPath: Assets/ExtrudeMeshAlongBezierTool/Examples/Materials/SimpleRoadMaterial.mat
+  uploadId: 491280
