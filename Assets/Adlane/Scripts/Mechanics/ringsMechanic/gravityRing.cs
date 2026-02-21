@@ -3,14 +3,17 @@ using System.Collections;
 
 public class gravityRing : MonoBehaviour
 {
-    [SerializeField] private float bufferDuration = 0.5f;
-    [SerializeField] private float slowMotionScale = 0.1f;
-    [SerializeField] private float inputGracePeriod = 0.1f;
+    [SerializeField] private float bufferDuration = 2.5f;
+    [SerializeField] private float slowMotionScale = 0.05f;
+    [SerializeField] private float inputGracePeriod = 0.15f;
 
     private bool isBufferActive = false;
     private bool isGracePeriodOver = false;
     private Coroutine bufferCoroutine;
     private FPController fpController;
+
+    // Store input snapshot when grace period ends — not before
+    private Vector2 inputSnapshot = Vector2.zero;
 
     private void OnTriggerEnter(Collider other)
     {
@@ -27,12 +30,11 @@ public class gravityRing : MonoBehaviour
     {
         if (!isBufferActive || !isGracePeriodOver || fpController == null) return;
 
+        // Read FRESH input after grace period — not cached input from before
         Vector2 input = fpController.MoveInput;
 
         if (input.y > 0.5f) EndBufferAndSetGravity(Vector3.up);
         else if (input.y < -0.5f) EndBufferAndSetGravity(Vector3.down);
-        else if (input.x < -0.5f) EndBufferAndSetGravity(-fpController.transform.right);
-        else if (input.x > 0.5f) EndBufferAndSetGravity(fpController.transform.right);
     }
 
     private void EndBufferAndSetGravity(Vector3 gravityDirection)
@@ -61,16 +63,28 @@ public class gravityRing : MonoBehaviour
         isBufferActive = true;
         isGracePeriodOver = false;
 
-        // Grace period — ignore input so jump/movement keys don't accidentally trigger
+        // Wait for grace period in REAL time
         yield return new WaitForSecondsRealtime(inputGracePeriod);
+
+        // Only start reading input AFTER the player has released their keys
+        // Wait until input is neutral before enabling direction choice
+        float waitedTime = 0f;
+        float maxWait = 0.5f;
+        while (fpController.MoveInput.sqrMagnitude > 0.1f && waitedTime < maxWait)
+        {
+            waitedTime += Time.unscaledDeltaTime;
+            yield return null;
+        }
 
         isGracePeriodOver = true;
 
-        // Wait remaining buffer time
-        yield return new WaitForSecondsRealtime(bufferDuration - inputGracePeriod);
+        // Wait remaining buffer time in real time
+        float remaining = bufferDuration - inputGracePeriod - waitedTime;
+        if (remaining > 0f)
+            yield return new WaitForSecondsRealtime(remaining);
 
-        // No input chosen — default back to down
+        // No input chosen — keep current gravity
         if (isBufferActive)
-            EndBufferAndSetGravity(Vector3.down);
+            EndBufferAndSetGravity(fpController.GravityDirection);
     }
 }

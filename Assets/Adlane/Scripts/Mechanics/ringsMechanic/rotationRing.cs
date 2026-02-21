@@ -3,10 +3,10 @@ using System.Collections;
 
 public class rotationRing : MonoBehaviour
 {
-    [SerializeField] private float bufferDuration = 0.5f;
-    [SerializeField] private float slowMotionScale = 0.1f;
+    [SerializeField] private float bufferDuration = 2.5f;
+    [SerializeField] private float slowMotionScale = 0.05f;
     [SerializeField] private float rotationDuration = 0.2f;
-    [SerializeField] private float inputGracePeriod = 0.1f;
+    [SerializeField] private float inputGracePeriod = 0.15f;
     [SerializeField] private float launchSpeed = 20f; // How fast to throw the player
 
     private bool isBufferActive = false;
