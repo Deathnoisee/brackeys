@@ -15,6 +15,7 @@ public class FPController : MonoBehaviour
     [Header("Sliding")]
     public float SlideSpeed = 18f;
     public float SlideAccelerationRate = 4f;
+    public float SlideSteerSpeed = 5f; // How much you can steer during a slide
     public float StandHeight = 2f;
     public float CrouchHeight = 1f;
     private bool isSlideLocked = false;
@@ -25,6 +26,12 @@ public class FPController : MonoBehaviour
 
     [Header("Dashing")]
     public float DashSpeed = 30f;
+    public float DashDuration = 0.15f;
+    public float DashCooldown = 1f;
+    private bool isDashing = false;
+    private float dashTimer = 0f;
+    private float dashCooldownTimer = 0f;
+    private Vector3 dashDirection;
 
     [Header("Jumping")]
     [SerializeField] float JumpHeight = 2f;
@@ -46,7 +53,7 @@ public class FPController : MonoBehaviour
     [Header("Physics")]
     [SerializeField] float GravityScale = 3f;
     public float VerticalVelocity = 0f;
-    public Vector3 CurrentVelocity { get; private set; }
+    public Vector3 CurrentVelocity;
     public float CurrentSpeed { get; private set; }
     public bool WasGrounded = false;
     public bool IsGrounded => characterController.isGrounded;
@@ -89,10 +96,21 @@ public class FPController : MonoBehaviour
         }
 
         WasGrounded = IsGrounded;
+
+        if (dashCooldownTimer > 0f)
+            dashCooldownTimer -= Time.deltaTime;
     }
 
     void MoveUpdate()
     {
+        // Tick dash timer
+        if (isDashing)
+        {
+            dashTimer -= Time.deltaTime;
+            if (dashTimer <= 0f)
+                isDashing = false;
+        }
+
         //Determine Input Direction
         Vector3 inputDirection = transform.forward * MoveInput.y + transform.right * MoveInput.x;
         inputDirection.y = 0f;
@@ -100,9 +118,15 @@ public class FPController : MonoBehaviour
 
         bool hasInput = MoveInput.sqrMagnitude >= 0.01f;
 
+        // DASHING — overrides everything, locked direction
+        if (isDashing)
+        {
+            CurrentSpeed = DashSpeed;
+            CurrentVelocity = dashDirection * DashSpeed;
+        }
         //SLIDING
         // We check if we are grounded, holding Ctrl, moving fast enough, and not locked out
-        if (IsGrounded && SlideInput && !isSlideLocked && (CurrentSpeed > 0.1f || hasInput))
+        else if (IsGrounded && SlideInput && !isSlideLocked && (CurrentSpeed > 0.1f || hasInput))
         {
             if (!isSliding)
             {
@@ -111,6 +135,12 @@ public class FPController : MonoBehaviour
                 slideDirection = hasInput ? inputDirection : transform.forward;
                 CurrentSpeed = SlideSpeed;
                 slideTimer = 0f;
+            }
+
+            // Steer the slide direction slightly based on input
+            if (hasInput)
+            {
+                slideDirection = Vector3.Lerp(slideDirection, inputDirection, SlideSteerSpeed * Time.deltaTime).normalized;
             }
 
             slideTimer += Time.deltaTime;
@@ -132,7 +162,7 @@ public class FPController : MonoBehaviour
                 }
             }
 
-            // Apply movement strictly along the locked slide direction
+            // Apply movement along the (steered) slide direction
             CurrentVelocity = slideDirection * CurrentSpeed;
         }
         else
@@ -147,10 +177,10 @@ public class FPController : MonoBehaviour
                     moveTimer += Time.deltaTime;
                     float curveValue = AccelerationCurve.Evaluate(Mathf.Clamp01(moveTimer / AccelerationTime));
 
+                    // Snap back to RunSpeed instantly if above it (no more slow decel)
                     if (CurrentSpeed > RunSpeed)
                     {
-                        // Smoothly bleed off excess speed from a jump/dash landing
-                        CurrentSpeed = Mathf.MoveTowards(CurrentSpeed, RunSpeed, DecelerationRate * Time.deltaTime);
+                        CurrentSpeed = RunSpeed;
                     }
                     else
                     {
@@ -181,7 +211,7 @@ public class FPController : MonoBehaviour
                     CurrentVelocity = Vector3.MoveTowards(CurrentVelocity, targetVelocity, AirControl * Time.deltaTime);
                 }
                 // IF NO INPUT: We do absolutely nothing to CurrentVelocity horizontally. 
-                
+
             }
         }
 
@@ -205,8 +235,11 @@ public class FPController : MonoBehaviour
             VerticalVelocity = 0f;
         }
 
-        //Recalculate CurrentSpeed 
-        CurrentSpeed = new Vector3(CurrentVelocity.x, 0, CurrentVelocity.z).magnitude;
+        //Recalculate CurrentSpeed — skip during dash so it doesn't get overwritten
+        if (!isDashing)
+        {
+            CurrentSpeed = new Vector3(CurrentVelocity.x, 0, CurrentVelocity.z).magnitude;
+        }
     }
 
     void HandleSlidingHeight()
@@ -239,12 +272,21 @@ public class FPController : MonoBehaviour
 
     public void TryDash()
     {
-        // Only dash if we are pressing a movement key (WASD dictates direction)
-        if (MoveInput.sqrMagnitude >= 0.01f)
-        {
-            CurrentSpeed = DashSpeed;
-            // MoveUpdate will handle decelerating this smoothly back to RunSpeed
-        }
+        if (dashCooldownTimer > 0f) return; // On cooldown
+
+        // Only dash if pressing a movement key
+        Vector3 inputDir = transform.forward * MoveInput.y + transform.right * MoveInput.x;
+        inputDir.y = 0f;
+        inputDir.Normalize();
+
+        if (inputDir.sqrMagnitude < 0.01f) return; // No input = no dash
+
+        // Lock direction & start dash
+        dashDirection = inputDir;
+        isDashing = true;
+        dashTimer = DashDuration;
+        dashCooldownTimer = DashCooldown;
+        CurrentSpeed = DashSpeed;
     }
 
     void LookUpdate()

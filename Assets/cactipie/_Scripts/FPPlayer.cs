@@ -1,3 +1,4 @@
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -6,11 +7,12 @@ public class FPPlayer : MonoBehaviour
 {
     [Header("Components")]
     [SerializeField] FPController FPController;
+    [SerializeField] PowerUps powerUps;
 
     void OnValidate()
     {
-        if (FPController == null)
-            FPController = GetComponent<FPController>();
+        if (FPController == null) FPController = GetComponent<FPController>();
+        if (powerUps == null) powerUps = GetComponent<PowerUps>();
     }
 
     void Start()
@@ -19,35 +21,37 @@ public class FPPlayer : MonoBehaviour
         Cursor.lockState = CursorLockMode.Locked;
     }
 
-    void OnMove(InputValue Value)
+    public void OnMove(InputAction.CallbackContext context)
     {
-        FPController.MoveInput = Value.Get<Vector2>();
+        FPController.MoveInput = context.ReadValue<Vector2>();
     }
 
-    void OnLook(InputValue Value)
+    public void OnLook(InputAction.CallbackContext context)
     {
-        FPController.LookInput = Value.Get<Vector2>();
+        FPController.LookInput = context.ReadValue<Vector2>();
     }
 
-    void OnJump(InputValue Value)
+    public void OnJump(InputAction.CallbackContext context)
     {
-        if (Value.isPressed)
-        {
-            FPController.TryJump();
-        }
+        if (!context.performed) return;
+        FPController.TryJump();
     }
 
-    void OnDash(InputValue Value)
+    public void OnDash(InputAction.CallbackContext context)
     {
-        if (Value.isPressed)
-        {
-            FPController.TryDash();
-        }
+        if (!context.performed) return;
+        FPController.TryDash();
     }
 
-    void OnSlide(InputValue Value)
+    public void OnSlidePerformed(InputAction.CallbackContext context)
     {
-        // Holding the button keeps it true, releasing makes it false
-        FPController.SlideInput = Value.isPressed;
+        float value = context.ReadValue<float>();
+        FPController.SlideInput = value > 0.5f;
     }
+    public void OnSuperJump(InputAction.CallbackContext context)
+    {
+        powerUps.OnSuperJump(context);
+    }
+
+
 }

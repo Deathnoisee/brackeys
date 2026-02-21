@@ -1,13 +1,16 @@
 using UnityEngine;
+using UnityEngine.UI;
 
 public class MomentumMeter : MonoBehaviour
 {   
     // velocity increases the meter so constant checking for velocity to increase the meter, 10 velocity = 1 point per sec, 100 velocity = 10 points, 
     [SerializeField] private float velocityToMeterRatio = 0.1f; 
-    [SerializeField] private float maxMeterValue = 450f;
+    [SerializeField] private float maxMeterValue = 100f;
     [SerializeField] private float decayRate = 5f;
+    [SerializeField] private Slider meterSlider; 
     private float currentMeter = 0f;
     private CharacterController characterController;
+
 
     void Start()
     {
@@ -25,6 +28,10 @@ public class MomentumMeter : MonoBehaviour
             currentMeter -= decayRate * Time.deltaTime;
         }
         currentMeter = Mathf.Clamp(currentMeter, 0f, maxMeterValue);
+        if (meterSlider != null)
+        {
+            meterSlider.value = currentMeter / maxMeterValue;
+        }
     }
 
     public float GetCurrentMeter()
@@ -35,4 +42,5 @@ public class MomentumMeter : MonoBehaviour
     {
         currentMeter = 0f;
     }
+
 }

@@ -4,52 +4,61 @@ using UnityEngine.InputSystem;
 
 public class PowerUps : MonoBehaviour
 {
-    [SerializeField] private float superJumpForce = 10f;
-    [SerializeField] private float jumpAngle = 45f;
+    [Header("Super Jump")]
+    [SerializeField] private float baseUpForce = 10f;
+    [SerializeField] private float upForceMultiplier = 0.5f;
+    [SerializeField] private float forwardForceMultiplier = 1.5f;
+    [SerializeField] private float superJumpDuration = 0.5f;
+
+    [Header("References")]
     [SerializeField] private MomentumMeter momentumMeter;
-    [SerializeField] private CharacterController characterController;
+    [SerializeField] private FPController fpController;
 
     private bool superJumpActive = false;
     private bool isButtonPressed = false;
-    public void OnSuperJump(InputValue Value)
+
+    private void OnValidate()
     {
-        if (Value.isPressed)
+        if (fpController == null) fpController = GetComponent<FPController>();
+    }
+
+    public void OnSuperJump(InputAction.CallbackContext context)
+    {
+        if (context.performed)
         {
             isButtonPressed = true;
         }
-        else if (isButtonPressed) 
+        else if (context.canceled && isButtonPressed)
         {
-            isButtonPressed = false; 
+            isButtonPressed = false;
 
             if (!superJumpActive && momentumMeter.GetCurrentMeter() >= 100f)
             {
-                superJumpActive = true;
-
-                Vector3 forward = transform.forward;
-                Vector3 upward = Vector3.up;
-                Vector3 jumpDirection = (forward + upward).normalized;
-
-                jumpDirection = Quaternion.AngleAxis(jumpAngle, transform.right) * jumpDirection;
-                Vector3 jumpVelocity = jumpDirection * superJumpForce;
-
-                StartCoroutine(PerformSuperJump(jumpVelocity));
-
-                momentumMeter.ResetMeter();
+            superJumpActive = true;
+            PerformSuperJump();
+            momentumMeter.ResetMeter();
             }
         }
     }
 
-    private IEnumerator PerformSuperJump(Vector3 jumpVelocity)
+    private void PerformSuperJump()
     {
-        float duration = 0.3f;
-        float elapsedTime = 0f;
+        float currentSpeed = fpController.CurrentSpeed;
 
-        while (elapsedTime < duration)
-        {
-            characterController.Move(jumpVelocity * Time.deltaTime);
-            elapsedTime += Time.deltaTime;
-            yield return null;
-        }
+        // Use camera forward flattened to horizontal — always where you're LOOKING, not moving
+        Vector3 forward = fpController.transform.forward;
+        forward.y = 0f;
+        forward.Normalize();
+
+        // Scale forces based on current velocity
+        float upForce = baseUpForce + (currentSpeed * upForceMultiplier);
+        float forwardForce = currentSpeed * forwardForceMultiplier;
+
+        // Set vertical velocity for the arc — let FPController's gravity handle the rest
+        fpController.VerticalVelocity = upForce;
+
+        // Set horizontal velocity in the forward direction
+        fpController.CurrentVelocity = forward * forwardForce;
 
         superJumpActive = false;
     }
