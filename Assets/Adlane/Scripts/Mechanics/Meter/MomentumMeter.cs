@@ -43,4 +43,9 @@ public class MomentumMeter : MonoBehaviour
         currentMeter = 0f;
     }
 
+    public void SetMeter(float value)
+    {
+        currentMeter = Mathf.Clamp(value, 0f, maxMeterValue);
+    }
+
 }

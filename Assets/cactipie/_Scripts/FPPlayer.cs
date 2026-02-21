@@ -53,5 +53,9 @@ public class FPPlayer : MonoBehaviour
         powerUps.OnSuperJump(context);
     }
 
-
+    public void OnRespawn(InputAction.CallbackContext context)
+    {
+        if (!context.performed) return;
+        CheckpointManager.Instance.Respawn();
+    }
 }
