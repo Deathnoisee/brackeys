@@ -37,6 +37,8 @@ public class FPController : MonoBehaviour
     [SerializeField] float JumpHeight = 2f;
     [SerializeField] float JumpSpeedBoost = 4f;
     [SerializeField] bool canDoubleJump = true;
+    [SerializeField] float jumpGracePeriod = 0.15f;
+    private float jumpGraceTimer = 0f;
     private int timesJumped = 0;
     public float AirControl = 15f; // How much you can steer while jumping
 
@@ -51,12 +53,17 @@ public class FPController : MonoBehaviour
     }
 
     [Header("Physics")]
-    [SerializeField] float GravityScale = 3f;
+    [SerializeField] float GravityStrength = 30f;
+    [SerializeField] float groundCheckDistance = 0.1f;
+    [SerializeField] LayerMask groundMask = ~0;
     public float VerticalVelocity = 0f;
     public Vector3 CurrentVelocity;
     public float CurrentSpeed { get; private set; }
     public bool WasGrounded = false;
-    public bool IsGrounded => characterController.isGrounded;
+    private bool isGrounded = false;
+    public bool IsGrounded => isGrounded;
+    public Vector3 GravityDirection { get; private set; } = Vector3.down;
+    public Vector3 UpDirection => -GravityDirection;
 
     [Header("Input States")]
     public Vector2 MoveInput;
@@ -85,6 +92,7 @@ public class FPController : MonoBehaviour
 
     void Update()
     {
+        CheckGrounded();
         HandleSlidingHeight();
         MoveUpdate();
         LookUpdate();
@@ -99,6 +107,36 @@ public class FPController : MonoBehaviour
 
         if (dashCooldownTimer > 0f)
             dashCooldownTimer -= Time.deltaTime;
+
+        if (jumpGraceTimer > 0f)
+            jumpGraceTimer -= Time.deltaTime;
+    }
+
+    void CheckGrounded()
+    {
+        if (jumpGraceTimer > 0f)
+        {
+            isGrounded = false;
+            return;
+        }
+
+        float radius = characterController.radius * 0.9f;
+
+        // Always cast from center — works for any gravity direction
+        Vector3 origin = transform.position + characterController.center;
+
+        // Cast distance = half capsule height + a little extra
+        float castDistance = (characterController.height * 0.5f) + groundCheckDistance;
+
+        isGrounded = Physics.SphereCast(
+            origin,
+            radius,
+            GravityDirection,
+            out RaycastHit hit,
+            castDistance,
+            groundMask,
+            QueryTriggerInteraction.Ignore
+        );
     }
 
     void MoveUpdate()
@@ -111,10 +149,19 @@ public class FPController : MonoBehaviour
                 isDashing = false;
         }
 
-        //Determine Input Direction
-        Vector3 inputDirection = transform.forward * MoveInput.y + transform.right * MoveInput.x;
-        inputDirection.y = 0f;
-        inputDirection.Normalize();
+        // Use camera forward flattened to gravity plane instead of transform.forward
+        // This way movement always works regardless of gravity direction
+        Vector3 camForward = Vector3.ProjectOnPlane(fpCamera.transform.forward, GravityDirection).normalized;
+        Vector3 camRight = Vector3.ProjectOnPlane(fpCamera.transform.right, GravityDirection).normalized;
+
+        // Fallback if camera is looking directly along gravity axis
+        if (camForward.sqrMagnitude < 0.001f)
+            camForward = Vector3.ProjectOnPlane(fpCamera.transform.up, GravityDirection).normalized;
+        if (camRight.sqrMagnitude < 0.001f)
+            camRight = Vector3.ProjectOnPlane(Vector3.right, GravityDirection).normalized;
+
+        Vector3 inputDirection = camForward * MoveInput.y + camRight * MoveInput.x;
+        inputDirection = Vector3.ProjectOnPlane(inputDirection, GravityDirection).normalized;
 
         bool hasInput = MoveInput.sqrMagnitude >= 0.01f;
 
@@ -125,19 +172,16 @@ public class FPController : MonoBehaviour
             CurrentVelocity = dashDirection * DashSpeed;
         }
         //SLIDING
-        // We check if we are grounded, holding Ctrl, moving fast enough, and not locked out
         else if (IsGrounded && SlideInput && !isSlideLocked && (CurrentSpeed > 0.1f || hasInput))
         {
             if (!isSliding)
             {
-                // Lock in the slide direction the moment we hit Ctrl
                 isSliding = true;
-                slideDirection = hasInput ? inputDirection : transform.forward;
+                slideDirection = hasInput ? inputDirection : camForward;
                 CurrentSpeed = SlideSpeed;
                 slideTimer = 0f;
             }
 
-            // Steer the slide direction slightly based on input
             if (hasInput)
             {
                 slideDirection = Vector3.Lerp(slideDirection, inputDirection, SlideSteerSpeed * Time.deltaTime).normalized;
@@ -147,14 +191,11 @@ public class FPController : MonoBehaviour
 
             if (slideTimer < SlideDuration)
             {
-                // Maintain burst speed
                 CurrentSpeed = SlideSpeed;
             }
             else
             {
-                // Decelerate down to 0
                 CurrentSpeed = Mathf.MoveTowards(CurrentSpeed, 0f, DecelerationRate * Time.deltaTime);
-
                 if (CurrentSpeed <= 0.01f)
                 {
                     CurrentSpeed = 0f;
@@ -162,7 +203,6 @@ public class FPController : MonoBehaviour
                 }
             }
 
-            // Apply movement along the (steered) slide direction
             CurrentVelocity = slideDirection * CurrentSpeed;
         }
         else
@@ -177,16 +217,10 @@ public class FPController : MonoBehaviour
                     moveTimer += Time.deltaTime;
                     float curveValue = AccelerationCurve.Evaluate(Mathf.Clamp01(moveTimer / AccelerationTime));
 
-                    // Snap back to RunSpeed instantly if above it (no more slow decel)
                     if (CurrentSpeed > RunSpeed)
-                    {
                         CurrentSpeed = RunSpeed;
-                    }
                     else
-                    {
-                        // Normal acceleration
                         CurrentSpeed = curveValue * RunSpeed;
-                    }
 
                     CurrentVelocity = inputDirection * CurrentSpeed;
                 }
@@ -197,7 +231,6 @@ public class FPController : MonoBehaviour
                     moveTimer = 0f;
                     slideTimer = 0f;
                     CurrentVelocity = Vector3.zero;
-
                     if (!hasInput) isSlideLocked = false; // Reset the slide lock when hands leave keys
                 }
             }
@@ -218,28 +251,51 @@ public class FPController : MonoBehaviour
         // Handle Gravity
         if (IsGrounded && VerticalVelocity <= 0.01f)
         {
-            VerticalVelocity = -3f;
+            // Clamp to small negative value to keep grounded — not a big force
+            VerticalVelocity = -1f;
+        }
+        else if (!IsGrounded)
+        {
+            VerticalVelocity -= GravityStrength * Time.deltaTime;
+        }
+        // If grounded and VerticalVelocity > 0 (jumping) — let it run freely
+
+        Vector3 gravityComponent = VerticalVelocity > 0f
+            ? UpDirection * VerticalVelocity
+            : GravityDirection * Mathf.Abs(VerticalVelocity);
+
+        // Strip gravity axis from movement — critical for sideways gravity
+        Vector3 horizontalVelocity = Vector3.ProjectOnPlane(CurrentVelocity, GravityDirection);
+
+        // Only add gravity component when not grounded, or when grounding force is tiny
+        Vector3 fullVelocity;
+        if (IsGrounded && VerticalVelocity < 0f)
+        {
+            // Grounded — dont add gravity component to avoid sliding sideways
+            fullVelocity = horizontalVelocity;
         }
         else
         {
-            VerticalVelocity += Physics.gravity.y * GravityScale * Time.deltaTime;
+            fullVelocity = horizontalVelocity + gravityComponent;
         }
 
-        //  Move Controller
-        Vector3 fullVelocity = new Vector3(CurrentVelocity.x, VerticalVelocity, CurrentVelocity.z);
         CollisionFlags flags = characterController.Move(fullVelocity * Time.deltaTime);
 
-        // Ceiling bonk prevention
-        if (((flags & CollisionFlags.Above) != 0) && (VerticalVelocity > 0.01f))
+        // Ceiling bonk — SphereCast in UpDirection
+        if (VerticalVelocity > 0.01f)
         {
-            VerticalVelocity = 0f;
+            float radius = characterController.radius * 0.9f;
+            Vector3 origin = transform.position + characterController.center;
+            float castDistance = (characterController.height * 0.5f) + 0.1f;
+
+            if (Physics.SphereCast(origin, radius, UpDirection, out RaycastHit hit, castDistance, groundMask, QueryTriggerInteraction.Ignore))
+            {
+                VerticalVelocity = 0f;
+            }
         }
 
-        //Recalculate CurrentSpeed — skip during dash so it doesn't get overwritten
         if (!isDashing)
-        {
-            CurrentSpeed = new Vector3(CurrentVelocity.x, 0, CurrentVelocity.z).magnitude;
-        }
+            CurrentSpeed = CurrentVelocity.magnitude;
     }
 
     void HandleSlidingHeight()
@@ -256,32 +312,33 @@ public class FPController : MonoBehaviour
     {
         if (!IsGrounded)
         {
-            // Removed the VerticalVelocity > 0.01f check so you can double jump on the way down
             if (!canDoubleJump || timesJumped >= 2) return;
         }
 
-        VerticalVelocity = Mathf.Sqrt(JumpHeight * -2f * Physics.gravity.y * GravityScale);
+        VerticalVelocity = Mathf.Sqrt(JumpHeight * 2f * GravityStrength);
         timesJumped++;
 
-        // Small speed boost on jump that will naturally decelerate in MoveUpdate
+        // Grace period prevents ground check from killing jump immediately
+        jumpGraceTimer = jumpGracePeriod;
+        isGrounded = false;
+
         if (MoveInput.sqrMagnitude > 0.01f)
-        {
             CurrentSpeed += JumpSpeedBoost;
-        }
     }
 
     public void TryDash()
     {
-        if (dashCooldownTimer > 0f) return; // On cooldown
+        if (dashCooldownTimer > 0f) return;
 
-        // Only dash if pressing a movement key
-        Vector3 inputDir = transform.forward * MoveInput.y + transform.right * MoveInput.x;
-        inputDir.y = 0f;
-        inputDir.Normalize();
+        // Use camera-relative directions for dash too
+        Vector3 camForward = Vector3.ProjectOnPlane(fpCamera.transform.forward, GravityDirection).normalized;
+        Vector3 camRight = Vector3.ProjectOnPlane(fpCamera.transform.right, GravityDirection).normalized;
 
-        if (inputDir.sqrMagnitude < 0.01f) return; // No input = no dash
+        Vector3 inputDir = camForward * MoveInput.y + camRight * MoveInput.x;
+        inputDir = Vector3.ProjectOnPlane(inputDir, GravityDirection).normalized;
 
-        // Lock direction & start dash
+        if (inputDir.sqrMagnitude < 0.01f) return;
+
         dashDirection = inputDir;
         isDashing = true;
         dashTimer = DashDuration;
@@ -295,7 +352,19 @@ public class FPController : MonoBehaviour
 
         CurrentPitch -= input.y;
         fpCamera.transform.localRotation = Quaternion.Euler(CurrentPitch, 0f, 0f);
-        transform.Rotate(Vector3.up * input.x);
+
+        // Always rotate around world Y for yaw — keeps transform.forward on the XZ plane
+        // so camera projections onto any gravity plane always give valid movement directions
+        transform.Rotate(Vector3.up * input.x, Space.World);
     }
 
+    public void SetGravityDirection(Vector3 newGravityDir)
+    {
+        GravityDirection = newGravityDir.normalized;
+        VerticalVelocity = 0f;
+        CurrentVelocity = Vector3.zero;
+
+        // Reset grace timer so new gravity ground check starts fresh
+        jumpGraceTimer = jumpGracePeriod;
+    }
 }

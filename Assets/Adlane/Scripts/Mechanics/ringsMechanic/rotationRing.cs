@@ -6,38 +6,37 @@ public class rotationRing : MonoBehaviour
     [SerializeField] private float bufferDuration = 0.5f;
     [SerializeField] private float slowMotionScale = 0.1f;
     [SerializeField] private float rotationDuration = 0.2f;
+    [SerializeField] private float inputGracePeriod = 0.1f;
+    [SerializeField] private float launchSpeed = 20f; // How fast to throw the player
 
     private bool isBufferActive = false;
+    private bool isGracePeriodOver = false;
     private Transform playerTransform;
     private Coroutine bufferCoroutine;
-    private FPPlayer fpPlayer;
+    private FPController fpController;
 
     private void OnTriggerEnter(Collider other)
     {
         if (other.CompareTag("Player"))
         {
             playerTransform = other.transform;
-            fpPlayer = other.GetComponent<FPPlayer>();
+            fpController = other.GetComponent<FPController>();
 
-            if (fpPlayer != null)
-                //fpPlayer.OnMoveInput += HandleDirectionInput;
-
+            if (fpController != null)
                 bufferCoroutine = StartCoroutine(ActivateRotationBuffer());
         }
     }
 
-    private void HandleDirectionInput(Vector2 input)
+    private void Update()
     {
-        if (!isBufferActive) return;
+        if (!isBufferActive || !isGracePeriodOver || fpController == null) return;
 
-        if (input.x > 0.5f)
-            EndBufferAndRotate(90f);
-        else if (input.x < -0.5f)
-            EndBufferAndRotate(-90f);
-        else if (input.y < -0.5f)
-            EndBufferAndRotate(180f);
-        else if (input.y > 0.5f)
-            EndBufferAndRotate(0f);
+        Vector2 input = fpController.MoveInput;
+
+        if (input.x > 0.5f) EndBufferAndRotate(90f);
+        else if (input.x < -0.5f) EndBufferAndRotate(-90f);
+        else if (input.y < -0.5f) EndBufferAndRotate(180f);
+        else if (input.y > 0.5f) EndBufferAndRotate(0f);
     }
 
     private void EndBufferAndRotate(float angle)
@@ -45,14 +44,12 @@ public class rotationRing : MonoBehaviour
         if (!isBufferActive) return;
 
         isBufferActive = false;
+        isGracePeriodOver = false;
 
         if (bufferCoroutine != null)
             StopCoroutine(bufferCoroutine);
 
-        if (fpPlayer != null)
-            //fpPlayer.OnMoveInput -= HandleDirectionInput; // Unsubscribe
-
-            Time.timeScale = 1f;
+        Time.timeScale = 1f;
         Time.fixedDeltaTime = 0.02f;
 
         StartCoroutine(SmoothRotate(angle));
@@ -76,6 +73,11 @@ public class rotationRing : MonoBehaviour
         }
 
         playerTransform.rotation = targetRotation;
+
+        // Launch player in the new forward direction after rotation completes
+        Vector3 launchDir = Vector3.ProjectOnPlane(playerTransform.forward, fpController.GravityDirection).normalized;
+        fpController.CurrentVelocity = launchDir * launchSpeed;
+
         Destroy(gameObject);
     }
 
@@ -85,10 +87,18 @@ public class rotationRing : MonoBehaviour
         Time.fixedDeltaTime = 0.02f * Time.timeScale;
 
         isBufferActive = true;
+        isGracePeriodOver = false;
 
-        yield return new WaitForSecondsRealtime(bufferDuration);
+        // Wait grace period before reading input
+        yield return new WaitForSecondsRealtime(inputGracePeriod);
 
+        isGracePeriodOver = true;
+
+        // Wait remaining buffer time
+        yield return new WaitForSecondsRealtime(bufferDuration - inputGracePeriod);
+
+        // No input — default keep forward
         if (isBufferActive)
-            EndBufferAndRotate(0f); // Default keep forward
+            EndBufferAndRotate(0f);
     }
 }

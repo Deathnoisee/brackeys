@@ -1,42 +1,38 @@
 using UnityEngine;
-using UnityEngine.InputSystem;
 using System.Collections;
 
 public class gravityRing : MonoBehaviour
 {
     [SerializeField] private float bufferDuration = 0.5f;
     [SerializeField] private float slowMotionScale = 0.1f;
-    [SerializeField] private float gravityForce = 9.8f;
+    [SerializeField] private float inputGracePeriod = 0.1f;
 
     private bool isBufferActive = false;
-    private Transform playerTransform;
+    private bool isGracePeriodOver = false;
     private Coroutine bufferCoroutine;
-    private FPPlayer fpPlayer;
     private FPController fpController;
 
     private void OnTriggerEnter(Collider other)
     {
         if (other.CompareTag("Player"))
         {
-            playerTransform = other.transform;
-            fpPlayer = other.GetComponent<FPPlayer>();
             fpController = other.GetComponent<FPController>();
 
-            if (fpPlayer != null)
-                //    fpPlayer.OnMoveInput += HandleDirectionInput;
-
+            if (fpController != null)
                 bufferCoroutine = StartCoroutine(ActivateGravityBuffer());
         }
     }
 
-    private void HandleDirectionInput(Vector2 input)
+    private void Update()
     {
-        if (!isBufferActive) return;
+        if (!isBufferActive || !isGracePeriodOver || fpController == null) return;
 
-        if (input.y > 0.5f)      EndBufferAndSetGravity(Vector3.up);
+        Vector2 input = fpController.MoveInput;
+
+        if (input.y > 0.5f) EndBufferAndSetGravity(Vector3.up);
         else if (input.y < -0.5f) EndBufferAndSetGravity(Vector3.down);
-        else if (input.x < -0.5f) EndBufferAndSetGravity(Vector3.left);
-        else if (input.x > 0.5f)  EndBufferAndSetGravity(Vector3.right);
+        else if (input.x < -0.5f) EndBufferAndSetGravity(-fpController.transform.right);
+        else if (input.x > 0.5f) EndBufferAndSetGravity(fpController.transform.right);
     }
 
     private void EndBufferAndSetGravity(Vector3 gravityDirection)
@@ -44,22 +40,17 @@ public class gravityRing : MonoBehaviour
         if (!isBufferActive) return;
 
         isBufferActive = false;
+        isGracePeriodOver = false;
 
         if (bufferCoroutine != null)
             StopCoroutine(bufferCoroutine);
 
-        if (fpPlayer != null)
-            // fpPlayer.OnMoveInput -= HandleDirectionInput;
-
-            // Restore time
-            Time.timeScale = 1f;
+        Time.timeScale = 1f;
         Time.fixedDeltaTime = 0.02f;
 
-        // Apply the new gravity direction
-        if (fpController != null)
-            // fpController.SetGravityDirection(gravityDirection * gravityForce);
+        fpController.SetGravityDirection(gravityDirection);
 
-            Destroy(gameObject);
+        Destroy(gameObject);
     }
 
     private IEnumerator ActivateGravityBuffer()
@@ -68,9 +59,17 @@ public class gravityRing : MonoBehaviour
         Time.fixedDeltaTime = 0.02f * Time.timeScale;
 
         isBufferActive = true;
+        isGracePeriodOver = false;
 
-        yield return new WaitForSecondsRealtime(bufferDuration);
+        // Grace period — ignore input so jump/movement keys don't accidentally trigger
+        yield return new WaitForSecondsRealtime(inputGracePeriod);
 
+        isGracePeriodOver = true;
+
+        // Wait remaining buffer time
+        yield return new WaitForSecondsRealtime(bufferDuration - inputGracePeriod);
+
+        // No input chosen — default back to down
         if (isBufferActive)
             EndBufferAndSetGravity(Vector3.down);
     }
