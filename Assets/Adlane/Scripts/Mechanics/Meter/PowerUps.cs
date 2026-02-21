@@ -8,7 +8,6 @@ public class PowerUps : MonoBehaviour
     [SerializeField] private float baseUpForce = 10f;
     [SerializeField] private float upForceMultiplier = 0.5f;
     [SerializeField] private float forwardForceMultiplier = 1.5f;
-    [SerializeField] private float superJumpDuration = 0.5f;
 
     [Header("References")]
     [SerializeField] private MomentumMeter momentumMeter;
