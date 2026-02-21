@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections;   
 
 public class CheckpointManager : MonoBehaviour
 {
@@ -9,7 +10,6 @@ public class CheckpointManager : MonoBehaviour
     [SerializeField] private MomentumMeter momentumMeter;
 
     [Header("Settings")]
-    [SerializeField] private float respawnGracePeriod = 0.2f;
 
     private CheckpointData lastCheckpoint = null;
     private bool hasCheckpoint = false;
@@ -77,6 +77,10 @@ public class CheckpointManager : MonoBehaviour
         // Restore momentum meter
         momentumMeter.SetMeter(lastCheckpoint.momentumMeter);
 
+        Time.timeScale = 1f; // Ensure time is running after respawn
+
         Debug.Log($"Respawned at checkpoint {lastCheckpoint.checkpointIndex}");
     }
+
+
 }
